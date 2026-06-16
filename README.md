@@ -1,0 +1,100 @@
+# スコアキャプション編集ツール（PWA）
+
+iPhoneで撮影した試合動画に、得点・チーム名・セット・サーブ権などのスコアボードを重ねて表示するための **編集データ（JSON）** を作成する PWA です。動画を見ながら得点タイミングを記録し、動画上にスコアボードを重ねたプレビューを確認できます。
+
+> 最終的な MP4 書き出しは行いません。書き出した JSON を使って、PC 側（FFmpeg 等）で動画に焼き込む想定です（次フェーズ）。
+
+## 特長
+- **ビルド不要**：素の HTML/CSS/JS（ES Modules）。静的ファイルを置くだけ。
+- **オフライン動作**：Service Worker でアプリ本体をキャッシュ。
+- **端末外にアップロードしない**：動画はブラウザ内で再生するだけ。サーバ送信なし。
+- **動画は保存しない（再選択方式）**：編集データのみ IndexedDB に保存。再開時に同じ動画を選び直します（iOS Safari の容量・自動削除対策）。
+
+## ファイル構成
+```
+index.html              アプリ本体（4画面）
+manifest.webmanifest    PWAマニフェスト
+sw.js                   Service Worker（アプリシェルのみキャッシュ／動画は非キャッシュ）
+css/styles.css          スタイル（縦画面優先・横画面対応）
+js/
+  app.js                ルーティング・結線・自動保存
+  state.js              プロジェクトモデル・スコア算出
+  events.js             加点/取消/セット/サーブ権ロジック
+  storage.js            IndexedDB・JSON入出力
+  video.js              動画選択・再生・シーク
+  scoreboard.js         スコアボード重ね表示・ドラッグ
+  export.js             書き出し用JSON・FFmpegヒント
+icons/                  PWAアイコン（192/512）
+```
+
+## 使い方（操作フロー）
+1. アプリを開く（PWAとしてホーム画面に追加可能）。
+2. **新規プロジェクト** を作成。
+3. **設定画面** でチーム名・色・スコアボードの位置/文字サイズ等を設定。
+4. **編集画面** で「動画を選択」→ iPhone内の試合動画を選ぶ。
+5. 動画を再生し、得点が入った瞬間に **自チーム +1 / 相手 +1** を押す。
+6. 誤って押したら **取り消し**。セット終了で **次のセットへ**。
+7. シークすると、その時刻のスコア表示がプレビューに追従します。
+8. **履歴画面** で得点一覧を確認（時刻ジャンプ・削除）。
+9. 編集内容は自動保存（IndexedDB）。**JSON 書き出し** で外部保存も可能。
+
+## ローカルでの動作確認（PC）
+PWA / ES Modules のため、`file://` ではなく **HTTP サーバ経由**で開く必要があります。
+
+```bash
+# このフォルダで
+python -m http.server 8000
+#   → http://localhost:8000/ を Chrome 等で開く
+
+# もしくは
+npx serve .
+```
+
+DevTools の Application タブで、Manifest 認識・Service Worker 登録・オフライン（Network を offline にして再読込）を確認できます。
+
+## iPhone 実機での利用
+PWA・カメラロール動画の読み込みには **HTTPS** が必要です（`localhost` を除く）。
+
+1. このフォルダを静的ホスティングへデプロイ（例：GitHub Pages / Netlify / Cloudflare Pages）。
+   - GitHub Pages の場合：リポジトリに push → Settings → Pages → ブランチを公開。
+2. iPhone の Safari で公開 URL を開く。
+3. 共有メニュー → **「ホーム画面に追加」**。
+4. ホームのアイコンから起動（スタンドアロン表示）。
+5. 「動画を選択」から写真ライブラリ／ファイルの動画を選んで編集。
+
+> ローカルだけで実機確認したい場合は、同一 Wi-Fi 上の PC で HTTPS サーバ（自己署名証明書）を立て、`https://<PCのIP>:ポート` を iPhone Safari で開く方法もあります（証明書の信頼設定が必要）。
+
+## データ形式
+保存・書き出しされる JSON の主な構造（`js/state.js` 準拠）:
+
+```jsonc
+{
+  "id": "…",
+  "projectName": "2026-06-16 試合動画",
+  "videoFileName": "match001.mp4",
+  "videoDuration": 3600.5,
+  "currentSet": 1,
+  "teams": {
+    "home": { "name": "自チーム", "color": "#1f6feb" },
+    "away": { "name": "相手チーム", "color": "#f85149" }
+  },
+  "display": {
+    "position": "top-left", "x": 16, "y": 16,
+    "fontSize": 28, "scale": 1,
+    "textColor": "#ffffff", "backgroundColor": "#000000",
+    "backgroundOpacity": 0.55, "showBackground": true, "showServe": true
+  },
+  "events": [
+    { "time": 125.4, "set": 1, "team": "home",
+      "homeScore": 8, "awayScore": 5, "server": "home" }
+  ]
+}
+```
+
+**書き出し情報**ボタンは、上記に加えて時間区間付きセグメントと FFmpeg `drawtext` の参考ヒントを含む `*.export.json` を出力します（PC側ツールの入力用。完全なコマンド自動生成は将来拡張）。
+
+## 制限・対象外（初期版）
+iPhone単体でのMP4書き出し／再エンコード／複数動画結合／音声編集／テロップアニメーション／クラウド同期 などは対象外です。
+
+## ライセンス
+社内利用想定のサンプル実装。

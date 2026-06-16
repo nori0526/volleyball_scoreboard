@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0d1117" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="スコアキャプション" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <title>スコアキャプション編集</title>
+</head>
+<body>
+  <header id="app-header">
+    <button id="btn-back" class="header-btn" hidden>‹ 戻る</button>
+    <h1 id="header-title">スコアキャプション編集</h1>
+    <span id="save-indicator" class="save-indicator" aria-live="polite"></span>
+  </header>
+
+  <main id="app-main">
+    <!-- ============ プロジェクト画面 ============ -->
+    <section id="screen-projects" class="screen">
+      <div class="screen-pad">
+        <button id="btn-new-project" class="btn btn-primary btn-block">＋ 新規プロジェクト</button>
+        <button id="btn-import-json" class="btn btn-block">JSON を読み込む</button>
+        <input type="file" id="file-import" accept="application/json,.json" hidden />
+
+        <h2 class="section-title">保存済みプロジェクト</h2>
+        <div id="project-list" class="project-list">
+          <p class="empty-hint">まだプロジェクトがありません。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 設定画面 ============ -->
+    <section id="screen-settings" class="screen" hidden>
+      <div class="screen-pad">
+        <label class="field">
+          <span>プロジェクト名</span>
+          <input type="text" id="set-project-name" />
+        </label>
+
+        <h2 class="section-title">チーム</h2>
+        <div class="field-row">
+          <label class="field">
+            <span>自チーム名</span>
+            <input type="text" id="set-home-name" />
+          </label>
+          <label class="field field-color">
+            <span>色</span>
+            <input type="color" id="set-home-color" />
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span>相手チーム名</span>
+            <input type="text" id="set-away-name" />
+          </label>
+          <label class="field field-color">
+            <span>色</span>
+            <input type="color" id="set-away-color" />
+          </label>
+        </div>
+
+        <h2 class="section-title">スコアボードの見た目</h2>
+        <div class="field-row">
+          <label class="field field-color">
+            <span>文字色</span>
+            <input type="color" id="set-text-color" />
+          </label>
+          <label class="field field-color">
+            <span>背景色</span>
+            <input type="color" id="set-bg-color" />
+          </label>
+        </div>
+        <label class="field field-check">
+          <input type="checkbox" id="set-show-bg" />
+          <span>背景を表示する</span>
+        </label>
+        <label class="field">
+          <span>背景の透明度 <output id="out-bg-opacity"></output></span>
+          <input type="range" id="set-bg-opacity" min="0" max="1" step="0.05" />
+        </label>
+        <label class="field">
+          <span>表示位置</span>
+          <select id="set-position">
+            <option value="top-left">左上</option>
+            <option value="top-right">右上</option>
+            <option value="bottom-left">左下</option>
+            <option value="bottom-right">右下</option>
+            <option value="custom">任意位置（ドラッグ）</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>文字サイズ <output id="out-font-size"></output></span>
+          <input type="range" id="set-font-size" min="12" max="64" step="1" />
+        </label>
+        <label class="field">
+          <span>全体の拡大縮小 <output id="out-scale"></output></span>
+          <input type="range" id="set-scale" min="0.5" max="2.5" step="0.05" />
+        </label>
+        <label class="field field-check">
+          <input type="checkbox" id="set-show-serve" />
+          <span>サーブ権（赤丸）を表示する</span>
+        </label>
+
+        <button id="btn-settings-to-edit" class="btn btn-primary btn-block">編集画面へ</button>
+      </div>
+    </section>
+
+    <!-- ============ 編集画面 ============ -->
+    <section id="screen-edit" class="screen" hidden>
+      <div class="video-area">
+        <div id="video-wrap" class="video-wrap">
+          <video id="video" playsinline webkit-playsinline preload="metadata"></video>
+          <div id="scoreboard" class="scoreboard" hidden></div>
+          <div id="video-placeholder" class="video-placeholder">
+            <p>動画が選択されていません</p>
+            <button id="btn-pick-video" class="btn btn-primary">動画を選択</button>
+          </div>
+        </div>
+      </div>
+      <input type="file" id="file-video" accept="video/*" hidden />
+
+      <div class="edit-controls">
+        <div class="transport">
+          <button id="btn-play" class="btn btn-icon" aria-label="再生/一時停止">▶︎</button>
+          <input type="range" id="seek" class="seek" min="0" max="0" step="0.1" value="0" />
+          <span id="cur-time" class="mono">0:00 / 0:00</span>
+        </div>
+
+        <div class="status-row">
+          <span id="cur-set" class="chip">1セット目</span>
+          <span id="cur-score" class="chip chip-score">0 - 0</span>
+          <button id="btn-change-video" class="btn btn-small">動画変更</button>
+        </div>
+
+        <div class="score-buttons">
+          <button id="btn-home-plus" class="btn btn-score btn-home">
+            <span class="score-team" id="lbl-home">自チーム</span>
+            <span class="score-plus">+1</span>
+          </button>
+          <button id="btn-away-plus" class="btn btn-score btn-away">
+            <span class="score-team" id="lbl-away">相手チーム</span>
+            <span class="score-plus">+1</span>
+          </button>
+        </div>
+
+        <div class="action-buttons">
+          <button id="btn-undo" class="btn btn-warn">取り消し</button>
+          <button id="btn-toggle-serve" class="btn">サーブ権切替</button>
+          <button id="btn-next-set" class="btn">次のセットへ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ イベント一覧画面 ============ -->
+    <section id="screen-events" class="screen" hidden>
+      <div class="screen-pad">
+        <div class="events-actions">
+          <button id="btn-export-json" class="btn">JSON 書き出し</button>
+          <button id="btn-export-ffmpeg" class="btn">書き出し情報</button>
+        </div>
+        <table class="events-table">
+          <thead>
+            <tr><th>時刻</th><th>S</th><th>スコア</th><th>加点</th><th></th></tr>
+          </thead>
+          <tbody id="events-body"></tbody>
+        </table>
+        <p id="events-empty" class="empty-hint">得点イベントはまだありません。</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ ボトムナビ ============ -->
+  <nav id="bottom-nav" class="bottom-nav" hidden>
+    <button class="nav-btn" data-screen="projects">📁<span>一覧</span></button>
+    <button class="nav-btn" data-screen="settings">⚙️<span>設定</span></button>
+    <button class="nav-btn" data-screen="edit">🎬<span>編集</span></button>
+    <button class="nav-btn" data-screen="events">📝<span>履歴</span></button>
+  </nav>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
