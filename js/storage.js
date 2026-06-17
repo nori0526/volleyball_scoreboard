@@ -71,6 +71,17 @@ export function getLastProjectId() {
   try { return localStorage.getItem(LAST_KEY); } catch (_) { return null; }
 }
 
+// 永続ストレージを要求（iOSの自動削除を抑止）。失敗は握りつぶす。
+export async function requestPersistence() {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      if (navigator.storage.persisted && await navigator.storage.persisted()) return true;
+      return await navigator.storage.persist();
+    }
+  } catch (_) {}
+  return false;
+}
+
 // ===== JSON 入出力 =====
 export function downloadJson(filename, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });

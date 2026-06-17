@@ -67,6 +67,43 @@ export function toggleServe(p) {
 export function deleteEvent(p, index) {
   if (index < 0 || index >= p.events.length) return null;
   const [removed] = p.events.splice(index, 1);
+  recomputeSnapshots(p);
   touch(p);
   return removed;
+}
+
+// セットごとに時刻順で得点の積算（homeScore/awayScore）を振り直す。
+// 編集（時刻変更・チーム変更・削除）後に呼んで整合を保つ。server は変更しない。
+export function recomputeSnapshots(p) {
+  sortEvents(p);
+  const tally = {};
+  for (const e of p.events) {
+    if (!tally[e.set]) tally[e.set] = { home: 0, away: 0 };
+    if (e.team === 'home') tally[e.set].home++; else tally[e.set].away++;
+    e.homeScore = tally[e.set].home;
+    e.awayScore = tally[e.set].away;
+  }
+}
+
+// イベントの時刻を delta 秒ずらす（0〜maxTime でクランプ）。再計算込み。
+export function nudgeEventTime(p, index, delta, maxTime) {
+  const e = p.events[index];
+  if (!e) return null;
+  let t = (Number(e.time) || 0) + delta;
+  t = Math.max(0, maxTime ? Math.min(t, maxTime) : t);
+  e.time = Math.round(t * 100) / 100;
+  recomputeSnapshots(p);
+  touch(p);
+  return e;
+}
+
+// 加点チームを反転する。サーブ権も得点者へ移し、積算を振り直す。
+export function flipEventTeam(p, index) {
+  const e = p.events[index];
+  if (!e) return null;
+  e.team = e.team === 'home' ? 'away' : 'home';
+  e.server = e.team;
+  recomputeSnapshots(p);
+  touch(p);
+  return e;
 }

@@ -37,8 +37,11 @@ export function createProject() {
       backgroundColor: '#000000',
       backgroundOpacity: 0.55,
       showBackground: true,
-      showServe: true
+      showServe: true,
+      showSetCount: false,
+      padding: 5
     },
+    pauseOnScore: false,
     events: []
   };
 }
@@ -116,6 +119,63 @@ export function computeScoreAtTime(p, time) {
     away: snap.awayScore,
     server: found ? snap.server : null
   };
+}
+
+// 指定セットの time 時点のスコア（time以下の最後のイベント、無ければ 0-0）
+export function scoreOfSetAtTime(p, set, time) {
+  let home = 0, away = 0, server = null, found = false;
+  for (const e of p.events) {
+    if (e.set === set && e.time <= time + 1e-6) {
+      home = e.homeScore; away = e.awayScore; server = e.server; found = true;
+    }
+  }
+  return { home, away, server, found };
+}
+
+// プレビュー用のスコアボード全体を算出する。全セットを「列」として残す。
+// 表示セット数 = その時刻までに始まったセット。ただし編集の最前線（最後の
+// イベント以降の時刻）にいる場合は、進行中の currentSet（まだ得点が無くても）まで表示する。
+export function computeBoardAtTime(p, time) {
+  const eps = 1e-6;
+  let started = 1;
+  for (const e of p.events) if (e.time <= time + eps) started = Math.max(started, e.set);
+  const lastEventTime = p.events.reduce((m, e) => Math.max(m, e.time), 0);
+  const atLive = p.events.length === 0 || time + eps >= lastEventTime;
+  const top = atLive ? Math.max(started, p.currentSet) : started;
+  const sets = [];
+  for (let s = 1; s <= top; s++) {
+    const sc = scoreOfSetAtTime(p, s, time);
+    sets.push({ set: s, home: sc.home, away: sc.away });
+  }
+  const cur = scoreOfSetAtTime(p, top, time);
+  return { displaySet: top, sets, server: cur.found ? cur.server : null };
+}
+
+// 現在時刻 t より前/後の得点イベントの時刻を返す（無ければ null）。
+export function prevEventTime(p, t) {
+  let best = null;
+  for (const e of p.events) {
+    if (e.time < t - 1e-3 && (best === null || e.time > best)) best = e.time;
+  }
+  return best;
+}
+export function nextEventTime(p, t) {
+  let best = null;
+  for (const e of p.events) {
+    if (e.time > t + 1e-3 && (best === null || e.time < best)) best = e.time;
+  }
+  return best;
+}
+
+// 進行中セットの手前（1..uptoSet-1）までの獲得セット数を集計する。
+export function computeSetsWon(p, uptoSet) {
+  let home = 0, away = 0;
+  for (let s = 1; s < uptoSet; s++) {
+    const sc = scoreOfSetAtTime(p, s, Infinity);
+    if (sc.home > sc.away) home++;
+    else if (sc.away > sc.home) away++;
+  }
+  return { home, away };
 }
 
 // 編集中の現在スコア（currentSet の最終スコア）

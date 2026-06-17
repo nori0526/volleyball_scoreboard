@@ -101,9 +101,21 @@
           <span>全体の拡大縮小 <output id="out-scale"></output></span>
           <input type="range" id="set-scale" min="0.5" max="2.5" step="0.05" />
         </label>
+        <label class="field">
+          <span>内部余白 <output id="out-padding"></output></span>
+          <input type="range" id="set-padding" min="0" max="16" step="1" />
+        </label>
         <label class="field field-check">
           <input type="checkbox" id="set-show-serve" />
           <span>サーブ権（赤丸）を表示する</span>
+        </label>
+        <label class="field field-check">
+          <input type="checkbox" id="set-show-setcount" />
+          <span>セットカウント（獲得セット数）を表示する</span>
+        </label>
+        <label class="field field-check">
+          <input type="checkbox" id="set-pause-on-score" />
+          <span>得点ボタンで動画を自動一時停止する</span>
         </label>
 
         <button id="btn-settings-to-edit" class="btn btn-primary btn-block">編集画面へ</button>
@@ -119,6 +131,11 @@
           <div id="video-placeholder" class="video-placeholder">
             <p>動画が選択されていません</p>
             <button id="btn-pick-video" class="btn btn-primary">動画を選択</button>
+            <p class="hint-small">写真ライブラリからだとiOSが書き出すため時間がかかることがあります。<br>「ファイル」内のMP4を選ぶと高速です。</p>
+          </div>
+          <div id="video-loading" class="video-loading" hidden>
+            <div class="spinner"></div>
+            <p id="video-loading-text">読み込み中…</p>
           </div>
         </div>
       </div>
@@ -127,8 +144,25 @@
       <div class="edit-controls">
         <div class="transport">
           <button id="btn-play" class="btn btn-icon" aria-label="再生/一時停止">▶︎</button>
-          <input type="range" id="seek" class="seek" min="0" max="0" step="0.1" value="0" />
+          <div class="seek-wrap">
+            <input type="range" id="seek" class="seek" min="0" max="0" step="0.1" value="0" />
+            <div id="seek-markers" class="seek-markers"></div>
+          </div>
           <span id="cur-time" class="mono">0:00 / 0:00</span>
+        </div>
+
+        <div class="fine-seek">
+          <button id="btn-back10" class="btn btn-fine">◀10</button>
+          <button id="btn-back1" class="btn btn-fine">◀1</button>
+          <button id="btn-fwd1" class="btn btn-fine">1▶</button>
+          <button id="btn-fwd10" class="btn btn-fine">10▶</button>
+          <select id="play-rate" class="play-rate" aria-label="再生速度">
+            <option value="1">1x</option>
+            <option value="0.5">0.5x</option>
+            <option value="0.25">0.25x</option>
+          </select>
+          <button id="btn-prev-event" class="btn btn-fine">◀得点</button>
+          <button id="btn-next-event" class="btn btn-fine">得点▶</button>
         </div>
 
         <div class="status-row">
@@ -151,7 +185,10 @@
         <div class="action-buttons">
           <button id="btn-undo" class="btn btn-warn">取り消し</button>
           <button id="btn-toggle-serve" class="btn">サーブ権切替</button>
-          <button id="btn-next-set" class="btn">次のセットへ</button>
+        </div>
+        <div class="action-buttons">
+          <button id="btn-prev-set" class="btn">‹ 前セット</button>
+          <button id="btn-next-set" class="btn">次セット ›</button>
         </div>
       </div>
     </section>

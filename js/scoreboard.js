@@ -1,4 +1,5 @@
 // scoreboard.js — スコアボードの重ね表示・位置/サイズ/配色適用・ドラッグ
+import { computeSetsWon } from './state.js';
 
 function hexToRgba(hex, alpha) {
   let h = (hex || '#000000').replace('#', '');
@@ -8,32 +9,42 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function setLabel(set) { return `${set}セット目`; }
-
-// el: #scoreboard, p: project, score: {set, home, away, server}
-export function renderScoreboard(el, p, score) {
+// el: #scoreboard, p: project, board: {displaySet, sets:[{set,home,away}], server}
+// 全セットを横並びの列として表示する（前セットの得点を残す）。
+export function renderScoreboard(el, p, board) {
   const d = p.display;
   el.hidden = false;
+  const sets = board.sets.length ? board.sets : [{ set: 1, home: 0, away: 0 }];
+  const showServe = d.showServe;
 
-  const serveDot = (side) =>
-    d.showServe
-      ? `<span class="sb-serve${score.server === side ? '' : ' hidden-slot'}"></span>`
-      : '';
+  // グリッド列：[チーム名] + [各セット] + [サーブ列(任意)]
+  const cols = 'auto repeat(' + sets.length + ', auto)' + (showServe ? ' auto' : '');
 
-  el.innerHTML = `
-    <div class="sb-set">${setLabel(score.set)}</div>
-    <div class="sb-row">
-      <span class="sb-mark" style="background:${p.teams.home.color}"></span>
-      <span class="sb-name">${escapeHtml(p.teams.home.name)}</span>
-      <span class="sb-score">${score.home}</span>
-      ${serveDot('home')}
-    </div>
-    <div class="sb-row">
-      <span class="sb-mark" style="background:${p.teams.away.color}"></span>
-      <span class="sb-name">${escapeHtml(p.teams.away.name)}</span>
-      <span class="sb-score">${score.away}</span>
-      ${serveDot('away')}
-    </div>`;
+  // ヘッダ行（セット番号）
+  let header = '<span class="sb-corner"></span>';
+  for (const s of sets) header += `<span class="sb-setnum">${s.set}</span>`;
+  if (showServe) header += '<span class="sb-corner"></span>';
+
+  const teamRow = (side) => {
+    const team = p.teams[side];
+    let r = `<span class="sb-team"><span class="sb-mark" style="background:${team.color}"></span>` +
+            `<span class="sb-name">${escapeHtml(team.name)}</span></span>`;
+    for (const s of sets) r += `<span class="sb-score">${side === 'home' ? s.home : s.away}</span>`;
+    if (showServe) r += `<span class="sb-serve${board.server === side ? '' : ' hidden-slot'}"></span>`;
+    return r;
+  };
+
+  let setCountHtml = '';
+  if (d.showSetCount) {
+    const w = computeSetsWon(p, board.displaySet);
+    setCountHtml = `<div class="sb-setcount">セット ${w.home} - ${w.away}</div>`;
+  }
+
+  el.innerHTML =
+    setCountHtml +
+    `<div class="sb-grid" style="grid-template-columns:${cols};">` +
+    header + teamRow('home') + teamRow('away') +
+    '</div>';
 
   applyStyle(el, p);
 }
@@ -44,6 +55,8 @@ export function applyStyle(el, p) {
   el.style.fontSize = d.fontSize + 'px';
   el.style.color = d.textColor;
   el.style.transform = `scale(${d.scale})`;
+  const pad = d.padding != null ? d.padding : 5;
+  el.style.padding = `${pad}px ${pad + 3}px`;
   if (d.showBackground) {
     el.style.background = hexToRgba(d.backgroundColor, d.backgroundOpacity);
   } else {

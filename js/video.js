@@ -11,7 +11,7 @@ export function formatTime(sec) {
 
 // 動画コントローラを生成。File を渡すと object URL で読み込む。
 // 動画 Blob は保存しない（再選択方式）。
-export function createVideoController(videoEl, { onLoaded, onTime } = {}) {
+export function createVideoController(videoEl, { onLoaded, onTime, onError } = {}) {
   let objectUrl = null;
   let rafId = null;
 
@@ -38,6 +38,7 @@ export function createVideoController(videoEl, { onLoaded, onTime } = {}) {
   videoEl.addEventListener('ended', stopLoop);
   videoEl.addEventListener('seeking', () => { if (onTime) onTime(videoEl.currentTime); });
   videoEl.addEventListener('seeked', () => { if (onTime) onTime(videoEl.currentTime); });
+  videoEl.addEventListener('error', () => { if (onError) onError(videoEl.error); });
 
   return {
     loadFile(file) {
@@ -57,6 +58,13 @@ export function createVideoController(videoEl, { onLoaded, onTime } = {}) {
       const d = videoEl.duration || 0;
       videoEl.currentTime = Math.min(Math.max(0, t), d || t);
     },
+    seekBy(delta) {
+      const d = videoEl.duration || 0;
+      const t = videoEl.currentTime + delta;
+      videoEl.currentTime = Math.min(Math.max(0, t), d || t);
+    },
+    setRate(r) { videoEl.playbackRate = r; },
+    rate() { return videoEl.playbackRate; },
     currentTime() { return videoEl.currentTime; },
     duration() { return videoEl.duration || 0; },
     destroy() { stopLoop(); revoke(); videoEl.removeAttribute('src'); videoEl.load(); }
