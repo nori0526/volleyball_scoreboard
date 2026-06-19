@@ -197,9 +197,11 @@
     <section id="screen-events" class="screen" hidden>
       <div class="screen-pad">
         <div class="events-actions">
-          <button id="btn-export-json" class="btn">JSON 書き出し</button>
+          <button id="btn-export-ass" class="btn btn-primary">ASS字幕を書き出し</button>
+          <button id="btn-export-json" class="btn">JSON</button>
           <button id="btn-export-ffmpeg" class="btn">書き出し情報</button>
         </div>
+        <p class="hint-small" style="margin:0 0 12px;">ASSは ffmpeg でそのまま焼き込めます（装飾付き）：<br><code>ffmpeg -i 動画 -vf "ass=xxx.ass" -c:a copy out.mp4</code></p>
         <table class="events-table">
           <thead>
             <tr><th>時刻</th><th>S</th><th>スコア</th><th>加点</th><th></th></tr>

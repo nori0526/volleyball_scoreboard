@@ -82,9 +82,9 @@ export async function requestPersistence() {
   return false;
 }
 
-// ===== JSON 入出力 =====
-export function downloadJson(filename, obj) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+// ===== JSON / テキスト 入出力 =====
+export function downloadText(filename, text, mime = 'text/plain') {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -93,6 +93,10 @@ export function downloadJson(filename, obj) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function downloadJson(filename, obj) {
+  downloadText(filename, JSON.stringify(obj, null, 2), 'application/json');
 }
 
 export function readJsonFile(file) {

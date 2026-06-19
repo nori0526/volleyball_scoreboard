@@ -30,7 +30,11 @@ export function createVideoController(videoEl, { onLoaded, onTime, onError } = {
   }
 
   videoEl.addEventListener('loadedmetadata', () => {
-    if (onLoaded) onLoaded({ duration: videoEl.duration || 0 });
+    if (onLoaded) onLoaded({
+      duration: videoEl.duration || 0,
+      width: videoEl.videoWidth || 0,
+      height: videoEl.videoHeight || 0
+    });
     if (onTime) onTime(videoEl.currentTime);
   });
   videoEl.addEventListener('play', startLoop);

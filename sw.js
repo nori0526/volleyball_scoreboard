@@ -1,6 +1,6 @@
 /* Service Worker: アプリシェルのみキャッシュ（cache-first）。
    動画リソースは絶対にキャッシュしない。 */
-const CACHE = 'score-caption-v3';
+const CACHE = 'score-caption-v4';
 const SHELL = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const SHELL = [
   './js/scoreboard.js',
   './js/events.js',
   './js/export.js',
+  './js/ass.js',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];

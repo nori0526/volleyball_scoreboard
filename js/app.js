@@ -9,11 +9,12 @@ import {
 } from './events.js';
 import {
   saveProject, getAllProjects, getProject, deleteProject,
-  downloadJson, readJsonFile, getLastProjectId, requestPersistence
+  downloadJson, downloadText, readJsonFile, getLastProjectId, requestPersistence
 } from './storage.js';
 import { createVideoController, formatTime } from './video.js';
 import { renderScoreboard, applyStyle, applyPosition, enableDrag } from './scoreboard.js';
 import { buildExportData, buildFfmpegHintLines, cleanProject, baseName } from './export.js';
+import { buildAss, ffmpegCommand } from './ass.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,7 +40,7 @@ function cacheEls() {
     'btn-back10', 'btn-back1', 'btn-fwd1', 'btn-fwd10', 'play-rate', 'btn-prev-event', 'btn-next-event',
     'btn-home-plus', 'btn-away-plus', 'lbl-home', 'lbl-away',
     'btn-undo', 'btn-toggle-serve', 'btn-prev-set', 'btn-next-set',
-    'btn-export-json', 'btn-export-ffmpeg', 'events-body', 'events-empty',
+    'btn-export-ass', 'btn-export-json', 'btn-export-ffmpeg', 'events-body', 'events-empty',
     'bottom-nav', 'toast'
   ].forEach((id) => { els[id] = $(id); });
 }
@@ -265,7 +266,7 @@ function hideVideoLoading() {
 
 function attachVideo() {
   video = createVideoController(els.video, {
-    onLoaded: ({ duration }) => {
+    onLoaded: ({ duration, width, height }) => {
       const metaMs = loadStartAt ? Math.round(performance.now() - loadStartAt) : 0;
       hideVideoLoading();
       // 長さの照合（保存値があり、0.5秒以上ずれていれば警告）
@@ -274,12 +275,16 @@ function attachVideo() {
       }
       expectedDuration = 0; expectedName = '';
       project.videoDuration = Math.round(duration * 100) / 100;
+      project.videoWidth = width || 0;
+      project.videoHeight = height || 0;
+      applyVideoAspect(); // プレビュー枠を実際の動画比に合わせる（焼き込み位置の一致のため）
       els.seek.max = duration || 0;
       els.seek.value = 0;
       persist();
       updateTimeLabel(0);
+      captureWrapSize();
       renderSeekMarkers();
-      console.log(`[video] メタデータ解析: ${metaMs}ms / 長さ ${Math.round(duration)}s`);
+      console.log(`[video] メタデータ解析: ${metaMs}ms / 長さ ${Math.round(duration)}s / ${width}x${height}`);
     },
     onTime: (t) => {
       if (!els.seek.matches(':active')) els.seek.value = t;
@@ -300,10 +305,25 @@ function refreshEdit() {
   const hasV = video && video.hasVideo();
   els['video-placeholder'].hidden = hasV;
   els.scoreboard.hidden = false;
+  applyVideoAspect();
   renderAtTime(currentTimeOrZero(), true); // 画面復帰時は名前/色も反映するため強制
   updateTimeLabel(currentTimeOrZero());
   els.seek.max = hasV ? video.duration() : (project.videoDuration || 0);
+  captureWrapSize();
   renderSeekMarkers();
+}
+
+// プレビュー枠を実際の動画アスペクト比に合わせる（無ければ16:9）
+function applyVideoAspect() {
+  const w = project && project.videoWidth, h = project && project.videoHeight;
+  els['video-wrap'].style.aspectRatio = (w && h) ? `${w} / ${h}` : '16 / 9';
+}
+
+// 編集中のプレビュー枠サイズを記憶（ASS書き出しの PlayRes に使う）
+let lastWrapW = 0, lastWrapH = 0;
+function captureWrapSize() {
+  const r = els['video-wrap'].getBoundingClientRect();
+  if (r.width > 0 && r.height > 0) { lastWrapW = r.width; lastWrapH = r.height; }
 }
 
 // シークバー上に得点位置のマーカーを描画（タップでその時刻へジャンプ）
@@ -523,6 +543,18 @@ function renderEventsList() {
 
 // ===== 書き出し =====
 function wireExport() {
+  els['btn-export-ass'].addEventListener('click', () => {
+    if (!project.events.length) { toast('得点イベントがありません'); return; }
+    captureWrapSize();
+    const playResX = lastWrapW || 390;
+    const playResY = lastWrapH || (project.videoWidth && project.videoHeight
+      ? Math.round(playResX * project.videoHeight / project.videoWidth) : 694);
+    const ass = buildAss(project, { playResX, playResY });
+    const fname = baseName(project).replace(/\s+/g, '_') + '.ass'; // フィルタ安全な名前
+    downloadText(fname, ass, 'text/plain');
+    console.log('[ass] ' + ffmpegCommand(project.videoFileName, fname));
+    toast('ASS字幕を書き出しました');
+  });
   els['btn-export-json'].addEventListener('click', () => {
     downloadJson(`${baseName(project)}.json`, cleanProject(project));
     toast('JSON を書き出しました');

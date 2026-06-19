@@ -21,6 +21,8 @@ export function createProject() {
     projectName: `${todayLabel()} 試合動画`,
     videoFileName: '',
     videoDuration: 0,
+    videoWidth: 0,
+    videoHeight: 0,
     updatedAt: new Date().toISOString(),
     currentSet: 1,
     teams: {
@@ -62,6 +64,8 @@ export function normalizeProject(raw) {
   sortEvents(p);
   p.currentSet = Number(raw.currentSet) || maxSet(p);
   p.videoDuration = Number(raw.videoDuration) || 0;
+  p.videoWidth = Number(raw.videoWidth) || 0;
+  p.videoHeight = Number(raw.videoHeight) || 0;
   p.videoFileName = raw.videoFileName || '';
   p.projectName = raw.projectName || base.projectName;
   return p;
