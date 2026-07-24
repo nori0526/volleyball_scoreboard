@@ -46,6 +46,9 @@ export function createProject() {
       padding: 5
     },
     pauseOnScore: false,
+    // セット開始時刻の記録: { "2": 動画秒, "3": ... }（1セット目は常に0）。
+    // 得点が入る前でも「新セット 0-0」の列をシーク/書き出しで表示するために必要。
+    setStarts: {},
     events: []
   };
 }
@@ -70,7 +73,28 @@ export function normalizeProject(raw) {
   p.videoHeight = Number(raw.videoHeight) || 0;
   p.videoFileName = raw.videoFileName || '';
   p.projectName = raw.projectName || base.projectName;
+  p.setStarts = {};
+  if (raw.setStarts && typeof raw.setStarts === 'object') {
+    for (const [k, v] of Object.entries(raw.setStarts)) {
+      const s = Number(k), t = Number(v);
+      if (Number.isInteger(s) && s >= 2 && isFinite(t) && t >= 0) p.setStarts[s] = t;
+    }
+  }
   return p;
+}
+
+// 時刻 t までに「始まっている」最大セット番号（得点 or セット開始記録から判定）
+export function startedSetAt(p, t) {
+  let started = 1;
+  for (const e of p.events) {
+    if (e.time <= t + 1e-6) started = Math.max(started, e.set);
+  }
+  if (p.setStarts) {
+    for (const [s, st] of Object.entries(p.setStarts)) {
+      if (Number(st) <= t + 1e-6) started = Math.max(started, Number(s));
+    }
+  }
+  return started;
 }
 
 function normalizeEvent(e) {
@@ -139,12 +163,11 @@ export function scoreOfSetAtTime(p, set, time) {
 }
 
 // プレビュー用のスコアボード全体を算出する。全セットを「列」として残す。
-// 表示セット数 = その時刻までに始まったセット。ただし編集の最前線（最後の
-// イベント以降の時刻）にいる場合は、進行中の currentSet（まだ得点が無くても）まで表示する。
+// 表示セット数 = その時刻までに始まったセット（得点 or setStarts 記録から判定）。
+// 編集の最前線（最後のイベント以降）では、進行中の currentSet（未記録でも）まで表示する。
 export function computeBoardAtTime(p, time) {
   const eps = 1e-6;
-  let started = 1;
-  for (const e of p.events) if (e.time <= time + eps) started = Math.max(started, e.set);
+  const started = startedSetAt(p, time);
   const lastEventTime = p.events.reduce((m, e) => Math.max(m, e.time), 0);
   const atLive = p.events.length === 0 || time + eps >= lastEventTime;
   const top = atLive ? Math.max(started, p.currentSet) : started;

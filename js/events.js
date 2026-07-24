@@ -1,22 +1,37 @@
 // events.js — 得点イベントの加算/取消/セット切替/サーブ権ロジック
-import { lastScoreOfSet, sortEvents, touch } from './state.js';
+import { sortEvents, touch, startedSetAt } from './state.js';
 
-// 得点加算：currentSet・指定動画時刻で +1。加点チームへサーブ権を移動。
-// スナップショット付きイベントを push する（仕様6.2）。
+// 得点加算：指定動画時刻で +1。加点チームへサーブ権を移動。
+// スナップショットは時刻順の再集計で振り直す（仕様6.2）。これにより、
+// 記録し忘れた得点を「過去の時点に戻って」挿入しても、挿入点以降の
+// スコアが正しく +1 ずつ繰り上がる。
+// セットは通常 currentSet。ただし現在セットの開始時刻より前へ戻って
+// 押した場合は、その時刻に進行していたセットへ挿入する（セットまたぎ対応）。
 export function addPoint(p, team, time) {
   const t = Math.max(0, Number(time) || 0);
-  const set = p.currentSet;
-  const last = lastScoreOfSet(p, set);
+  let set = p.currentSet;
+  const curStart = p.setStarts ? Number(p.setStarts[set]) : NaN;
+  if (isFinite(curStart) && t < curStart - 1e-6) set = startedSetAt(p, t);
   const ev = {
     time: t,
     set,
     team,
-    homeScore: last.homeScore + (team === 'home' ? 1 : 0),
-    awayScore: last.awayScore + (team === 'away' ? 1 : 0),
+    homeScore: 0, // recomputeSnapshots で確定
+    awayScore: 0,
     server: team // 加点したチームへサーブ権が移る
   };
   p.events.push(ev);
-  sortEvents(p);
+  recomputeSnapshots(p); // ソート＋セット内を時刻順に積算し直す
+  touch(p);
+  return ev;
+}
+
+// 指定イベント（参照）を取り消す。途中挿入した得点の Undo 用。
+export function undoEvent(p, ev) {
+  const i = p.events.indexOf(ev);
+  if (i < 0) return null;
+  p.events.splice(i, 1);
+  recomputeSnapshots(p);
   touch(p);
   return ev;
 }
@@ -33,20 +48,28 @@ export function undoLast(p) {
   if (idx === -1 && p.events.length) idx = p.events.length - 1; // フォールバック
   if (idx === -1) return null;
   const [removed] = p.events.splice(idx, 1);
+  recomputeSnapshots(p);
   touch(p);
   return removed;
 }
 
-// 次のセットへ。新セットは 0-0 から（イベント未記録なら算出上0-0）。
-export function nextSet(p) {
+// 次のセットへ。新セットは 0-0 から。切替時の動画時刻を setStarts に記録し、
+// シーク/書き出しでも「0-0 の新セット列」が切替時刻から表示されるようにする。
+export function nextSet(p, time) {
   p.currentSet += 1;
+  if (!p.setStarts) p.setStarts = {};
+  p.setStarts[p.currentSet] = Math.round(Math.max(0, Number(time) || 0) * 100) / 100;
   touch(p);
   return p.currentSet;
 }
 
-// 前のセットへ戻る（誤操作の救済。1未満にはしない）
+// 前のセットへ戻る（誤操作の救済。1未満にはしない）。戻したセットの開始記録は破棄。
 export function prevSet(p) {
-  if (p.currentSet > 1) { p.currentSet -= 1; touch(p); }
+  if (p.currentSet > 1) {
+    if (p.setStarts) delete p.setStarts[p.currentSet];
+    p.currentSet -= 1;
+    touch(p);
+  }
   return p.currentSet;
 }
 

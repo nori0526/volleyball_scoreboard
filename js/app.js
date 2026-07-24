@@ -4,7 +4,7 @@ import {
   prevEventTime, nextEventTime, genId, maxSet, touch
 } from './state.js';
 import {
-  addPoint, undoLast, nextSet, prevSet, toggleServe, deleteEvent,
+  addPoint, undoLast, undoEvent, nextSet, prevSet, toggleServe, deleteEvent,
   nudgeEventTime, flipEventTeam
 } from './events.js';
 import {
@@ -134,6 +134,7 @@ async function renderProjectList() {
 
 async function newProject() {
   project = createProject();
+  actionStack = [];
   await saveProject(project);
   showSaved();
   if (video) video.destroy();
@@ -156,6 +157,7 @@ async function openProject(id) {
   const raw = await getProject(id);
   if (!raw) { toast('プロジェクトが見つかりません'); return; }
   project = normalizeProject(raw);
+  actionStack = [];
   if (video) video.destroy();
   attachVideo();
   showScreen('edit');
@@ -470,27 +472,28 @@ function wireEdit() {
 
   els['btn-home-plus'].addEventListener('click', () => doAddPoint('home'));
   els['btn-away-plus'].addEventListener('click', () => doAddPoint('away'));
-  els['btn-undo'].addEventListener('click', () => {
-    const removed = undoLast(project);
-    if (!removed) { toast('取り消す得点がありません'); return; }
-    afterEdit();
-    toast('取り消しました');
-  });
+  els['btn-undo'].addEventListener('click', doUndo);
   els['btn-next-set'].addEventListener('click', () => {
-    const s = nextSet(project);
-    renderAtTime(currentTimeOrZero(), true);
+    const t = currentTimeOrZero();
+    const s = nextSet(project, t);
+    actionStack.push({ type: 'nextSet' });
+    renderAtTime(t, true);
+    renderSeekMarkers();
     persist(true);
-    toast(`${s}セット目を開始`);
+    toast(`${s}セット目を開始（${formatTime(t)}）`);
   });
   els['btn-prev-set'].addEventListener('click', () => {
     if (project.currentSet <= 1) { toast('これ以上戻れません'); return; }
+    const leavingStart = project.setStarts ? Number(project.setStarts[project.currentSet]) : NaN;
     const s = prevSet(project);
+    actionStack.push({ type: 'prevSet', time: isFinite(leavingStart) ? leavingStart : null });
     renderAtTime(currentTimeOrZero(), true);
     persist(true);
     toast(`${s}セット目へ戻りました`);
   });
   els['btn-toggle-serve'].addEventListener('click', () => {
     toggleServe(project);
+    actionStack.push({ type: 'serve' });
     renderAtTime(currentTimeOrZero(), true);
     persist(true);
   });
@@ -499,13 +502,60 @@ function wireEdit() {
   enableDrag(els.scoreboard, els['video-wrap'], () => project, () => persist());
 }
 
+// このセッションの操作履歴（「取り消し」= 直近アクションの取り消し）
+// {type:'point',ev} | {type:'nextSet'} | {type:'prevSet',time} | {type:'serve'}
+let actionStack = [];
+
 function doAddPoint(team) {
   const t = currentTimeOrZero();
-  addPoint(project, team, t);
+  const ev = addPoint(project, team, t);
+  actionStack.push({ type: 'point', ev });
   if (project.pauseOnScore && video && video.hasVideo() && !video.isPaused()) video.pause();
   afterEdit();
   const teamName = team === 'home' ? project.teams.home.name : project.teams.away.name;
-  toast(`${teamName} +1（${formatTime(t)}）`);
+  toast(`${teamName} +1（${formatTime(t)}）→ ${ev.homeScore}-${ev.awayScore}`);
+}
+
+// 直近の操作（得点/セット切替/サーブ切替）を取り消す。
+// 履歴が無ければ従来通りセット内の最新得点を取り消す。
+function doUndo() {
+  while (actionStack.length) {
+    const a = actionStack.pop();
+    if (a.type === 'point') {
+      if (undoEvent(project, a.ev)) {
+        afterEdit();
+        const name = a.ev.team === 'home' ? project.teams.home.name : project.teams.away.name;
+        toast(`取り消しました（${formatTime(a.ev.time)} の ${name}）`);
+        return;
+      }
+      continue; // 既に一覧から削除済み → さらに前の操作へ
+    }
+    if (a.type === 'nextSet') {
+      if (project.currentSet > 1) {
+        prevSet(project);
+        afterEdit();
+        toast(`セット切替を取り消しました（${project.currentSet}セット目へ）`);
+        return;
+      }
+      continue;
+    }
+    if (a.type === 'prevSet') {
+      const s = nextSet(project, a.time != null ? a.time : currentTimeOrZero());
+      afterEdit();
+      toast(`前セットへの移動を取り消しました（${s}セット目へ）`);
+      return;
+    }
+    if (a.type === 'serve') {
+      toggleServe(project);
+      afterEdit();
+      toast('サーブ権切替を取り消しました');
+      return;
+    }
+  }
+  const removed = undoLast(project);
+  if (!removed) { toast('取り消す操作がありません'); return; }
+  afterEdit();
+  toast('取り消しました');
 }
 
 // ===== イベント一覧 =====
@@ -602,6 +652,7 @@ function wireGlobal() {
       const raw = await readJsonFile(f);
       const data = raw && raw.project ? raw.project : raw; // export形式 or 素のプロジェクト
       project = normalizeProject(data);
+      actionStack = [];
       await saveProject(project);
       if (video) video.destroy();
       attachVideo();

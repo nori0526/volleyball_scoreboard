@@ -134,11 +134,19 @@ export function drawBoard(canvas, p, board, K, dpr = 1) {
     ctx.fillStyle = d.textColor;
     ctx.textAlign = 'left';
     ctx.fillText(p.teams[side].name, m.padH + m.markSz + m.markGap, cy);
-    // 各セットのスコア（右揃え・太字）
+    // 各セットのスコア（右揃え・太字）。
+    // 完了セット（最後の列以外）は敗者側を半透明にして勝者を強調する。
     ctx.font = `bold ${m.fs}px ${F}`;
     ctx.textAlign = 'right';
-    m.sets.forEach((s, i) =>
-      ctx.fillText(String(side === 'home' ? s.home : s.away), colRight[i], cy));
+    m.sets.forEach((s, i) => {
+      const finished = i < m.sets.length - 1;
+      const mine = side === 'home' ? s.home : s.away;
+      const theirs = side === 'home' ? s.away : s.home;
+      const isLoser = finished && mine < theirs;
+      if (isLoser) ctx.globalAlpha = 0.45;
+      ctx.fillText(String(mine), colRight[i], cy);
+      if (isLoser) ctx.globalAlpha = 1;
+    });
     // サーブ権の赤丸
     if (d.showServe && board.server === side) {
       ctx.fillStyle = '#ff2d2d';

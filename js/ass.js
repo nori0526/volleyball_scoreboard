@@ -2,7 +2,7 @@
 // ffmpeg で `-vf "ass=xxx.ass"` で焼き込み可能（Python等の変換不要）。
 // 座標系：PlayResX/Y は編集時のプレビュー枠サイズ。display.x/y/fontSize 等は
 // そのプレビュー枠px単位なので、libass が動画解像度へ比例スケールして焼き込む。
-import { scoreOfSetAtTime, computeSetsWon } from './state.js';
+import { scoreOfSetAtTime, computeSetsWon, startedSetAt } from './state.js';
 
 // ---- 色・時刻ユーティリティ ----
 function assColor(hex) { // '#rrggbb' -> 'BBGGRR'
@@ -26,10 +26,9 @@ function assTime(sec) {
 }
 function assText(s) { return String(s).replace(/[{}\\]/g, '').replace(/\r?\n/g, ' '); }
 
-// ---- 書き出し時のスコアボード状態（編集状態に依らず events だけで決定）----
+// ---- 書き出し時のスコアボード状態（events と setStarts 記録から決定）----
 function exportBoardAt(p, t) {
-  let started = 1;
-  for (const e of p.events) if (e.time <= t + 1e-6) started = Math.max(started, e.set);
+  const started = startedSetAt(p, t);
   const sets = [];
   for (let s = 1; s <= started; s++) {
     const sc = scoreOfSetAtTime(p, s, t);
@@ -46,9 +45,15 @@ export function buildStateSegments(p) {
   const events = [...p.events].sort((a, b) => a.time - b.time);
   if (!events.length) return [];
   const dur = p.videoDuration || (events[events.length - 1].time + 5);
-  // 境界＝0 と 各イベント時刻 と 終端
+  // 境界＝0 と 各イベント時刻 と 各セット開始時刻 と 終端
   const bounds = [0];
   for (const e of events) if (e.time > 0 && e.time < dur) bounds.push(e.time);
+  if (p.setStarts) {
+    for (const st of Object.values(p.setStarts)) {
+      const v = Number(st);
+      if (v > 0 && v < dur) bounds.push(v);
+    }
+  }
   bounds.push(dur);
   const uniq = [...new Set(bounds)].sort((a, b) => a - b);
 
@@ -174,9 +179,13 @@ export function buildAss(p, opts = {}) {
       dlg(1, `{\\an7\\pos(${r(cx)},${r(my)})\\bord0\\shad0\\1c${teamC(side)}\\p1}m 0 0 l ${r(markW)} 0 ${r(markW)} ${r(markW)} 0 ${r(markW)}{\\p0}`);
       // チーム名
       dlg(1, `{\\an7\\pos(${r(cx + markW + markGap)},${r(rowY)})\\fs${r(fs)}\\c${textC}\\bord0\\shad0}${assText(label)}`);
-      // 各セットのスコア
+      // 各セットのスコア（完了セットの敗者側は半透明で勝者を強調）
       for (let i = 0; i < numSets; i++) {
-        dlg(1, `{\\an9\\pos(${r(colRight(i))},${r(rowY)})\\fs${r(fs)}\\b1\\c${textC}\\bord0\\shad0}${getScore(st.sets[i])}`);
+        const s = st.sets[i];
+        const mine = side === 'home' ? s.home : s.away;
+        const theirs = side === 'home' ? s.away : s.home;
+        const dim = (i < numSets - 1 && mine < theirs) ? '\\alpha&H8C&' : '';
+        dlg(1, `{\\an9\\pos(${r(colRight(i))},${r(rowY)})\\fs${r(fs)}\\b1\\c${textC}${dim}\\bord0\\shad0}${getScore(s)}`);
       }
       // サーブ権の赤丸
       if (d.showServe && st.server === side) {
