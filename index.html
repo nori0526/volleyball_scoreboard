@@ -93,6 +93,7 @@
             <option value="custom">任意位置（ドラッグ）</option>
           </select>
         </label>
+        <p class="hint-small" style="margin:-6px 0 14px;">位置の微調整（あと数px動かす）は、編集画面の「スコア位置の微調整」でできます。</p>
         <label class="field">
           <span>文字サイズ <output id="out-font-size"></output></span>
           <input type="range" id="set-font-size" min="12" max="64" step="1" />
@@ -127,7 +128,7 @@
       <div class="video-area">
         <div id="video-wrap" class="video-wrap">
           <video id="video" playsinline webkit-playsinline preload="metadata"></video>
-          <div id="scoreboard" class="scoreboard" hidden></div>
+          <canvas id="scoreboard" class="scoreboard" hidden></canvas>
           <div id="video-placeholder" class="video-placeholder">
             <p>動画が選択されていません</p>
             <button id="btn-pick-video" class="btn btn-primary">動画を選択</button>
@@ -164,6 +165,20 @@
           <button id="btn-prev-event" class="btn btn-fine">◀得点</button>
           <button id="btn-next-event" class="btn btn-fine">得点▶</button>
         </div>
+        <p class="kbd-hint">Space 再生/停止 ・ ←→ ±1秒（Shift=10秒）・ F 自チーム+1 ・ J 相手+1 ・ U 取消 ・ S サーブ ・ N/P 次/前セット ・ 動画はドラッグ&ドロップでも読込可</p>
+
+        <details id="nudge-box" class="nudge-box">
+          <summary>スコア位置の微調整（1pxずつ）</summary>
+          <div class="nudge-controls">
+            <button id="nudge-up" class="btn btn-fine" aria-label="上へ1px">↑</button>
+            <button id="nudge-down" class="btn btn-fine" aria-label="下へ1px">↓</button>
+            <button id="nudge-left" class="btn btn-fine" aria-label="左へ1px">←</button>
+            <button id="nudge-right" class="btn btn-fine" aria-label="右へ1px">→</button>
+            <span id="nudge-val" class="mono">0, 0</span>
+            <button id="nudge-reset" class="btn btn-fine">リセット</button>
+          </div>
+          <p class="hint-small" style="margin:6px 0 0;">押し続けると連続で動きます。プリセット位置（左上等）からのオフセットとして保存され、画面の端まで寄せられます。</p>
+        </details>
 
         <div class="status-row">
           <span id="cur-set" class="chip">1セット目</span>
@@ -197,11 +212,12 @@
     <section id="screen-events" class="screen" hidden>
       <div class="screen-pad">
         <div class="events-actions">
-          <button id="btn-export-ass" class="btn btn-primary">ASS字幕を書き出し</button>
+          <button id="btn-export-burn" class="btn btn-primary">PNG焼き込み一式（ZIP）</button>
+          <button id="btn-export-ass" class="btn">ASS字幕</button>
           <button id="btn-export-json" class="btn">JSON</button>
           <button id="btn-export-ffmpeg" class="btn">書き出し情報</button>
         </div>
-        <p class="hint-small" style="margin:0 0 12px;">ASSは ffmpeg でそのまま焼き込めます（装飾付き）：<br><code>ffmpeg -i 動画 -vf "ass=xxx.ass" -c:a copy out.mp4</code></p>
+        <p class="hint-small" style="margin:0 0 12px;">「PNG焼き込み一式」：展開したフォルダに元動画を入れて burn.bat をダブルクリックするだけ。プレビューと同じ見た目で焼き込めます（要 ffmpeg）。</p>
         <table class="events-table">
           <thead>
             <tr><th>時刻</th><th>S</th><th>スコア</th><th>加点</th><th></th></tr>

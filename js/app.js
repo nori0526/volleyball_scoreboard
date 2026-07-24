@@ -9,12 +9,13 @@ import {
 } from './events.js';
 import {
   saveProject, getAllProjects, getProject, deleteProject,
-  downloadJson, downloadText, readJsonFile, getLastProjectId, requestPersistence
+  downloadJson, downloadText, downloadBlob, readJsonFile, getLastProjectId, requestPersistence
 } from './storage.js';
 import { createVideoController, formatTime } from './video.js';
-import { renderScoreboard, applyStyle, applyPosition, enableDrag } from './scoreboard.js';
+import { renderScoreboard, enableDrag } from './scoreboard.js';
 import { buildExportData, buildFfmpegHintLines, cleanProject, baseName } from './export.js';
 import { buildAss, ffmpegCommand } from './ass.js';
+import { buildBurnZip } from './burn.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,9 +39,10 @@ function cacheEls() {
     'video-loading', 'video-loading-text',
     'btn-play', 'seek', 'seek-markers', 'cur-time', 'cur-set', 'cur-score', 'btn-change-video',
     'btn-back10', 'btn-back1', 'btn-fwd1', 'btn-fwd10', 'play-rate', 'btn-prev-event', 'btn-next-event',
+    'nudge-up', 'nudge-down', 'nudge-left', 'nudge-right', 'nudge-val', 'nudge-reset',
     'btn-home-plus', 'btn-away-plus', 'lbl-home', 'lbl-away',
     'btn-undo', 'btn-toggle-serve', 'btn-prev-set', 'btn-next-set',
-    'btn-export-ass', 'btn-export-json', 'btn-export-ffmpeg', 'events-body', 'events-empty',
+    'btn-export-burn', 'btn-export-ass', 'btn-export-json', 'btn-export-ffmpeg', 'events-body', 'events-empty',
     'bottom-nav', 'toast'
   ].forEach((id) => { els[id] = $(id); });
 }
@@ -204,7 +206,7 @@ function wireSettings() {
     if (transform) v = transform(v);
     project.display[key] = v;
     syncOutputs();
-    applyStyle(els.scoreboard, project);
+    refreshPreviewOnly(); // Canvas再描画（見た目はレンダラ内で反映）
     persist();
   };
   els['set-home-color'].addEventListener('input', (e) => { project.teams.home.color = e.target.value; applyTeamButtonColors(); refreshPreviewOnly(); persist(); });
@@ -221,7 +223,7 @@ function wireSettings() {
   els['set-pause-on-score'].addEventListener('change', () => { project.pauseOnScore = els['set-pause-on-score'].checked; persist(); });
   els['set-position'].addEventListener('change', (e) => {
     project.display.position = e.target.value;
-    applyPosition(els.scoreboard, project);
+    refreshPreviewOnly();
     persist();
   });
   els['btn-settings-to-edit'].addEventListener('click', () => showScreen('edit'));
@@ -311,12 +313,14 @@ function refreshEdit() {
   els.seek.max = hasV ? video.duration() : (project.videoDuration || 0);
   captureWrapSize();
   renderSeekMarkers();
+  updateNudgeVal();
 }
 
 // プレビュー枠を実際の動画アスペクト比に合わせる（無ければ16:9）
 function applyVideoAspect() {
   const w = project && project.videoWidth, h = project && project.videoHeight;
   els['video-wrap'].style.aspectRatio = (w && h) ? `${w} / ${h}` : '16 / 9';
+  els['video-wrap'].style.setProperty('--ar', (w && h) ? String(w / h) : '1.7778');
 }
 
 // 編集中のプレビュー枠サイズを記憶（ASS書き出しの PlayRes に使う）
@@ -543,6 +547,26 @@ function renderEventsList() {
 
 // ===== 書き出し =====
 function wireExport() {
+  els['btn-export-burn'].addEventListener('click', async () => {
+    if (!project.events.length) { toast('得点イベントがありません'); return; }
+    if (!project.videoWidth || !project.videoHeight) {
+      toast('先に動画を一度読み込んで解像度を取得してください');
+      return;
+    }
+    captureWrapSize();
+    const r = els['video-wrap'].getBoundingClientRect();
+    const previewW = lastWrapW || r.width || 390;
+    const previewH = lastWrapH || r.height || 0;
+    toast('PNGを生成中…');
+    try {
+      const { blob, pngCount, segCount } = await buildBurnZip(project, { previewW, previewH });
+      downloadBlob(`${baseName(project).replace(/\s+/g, '_')}_burn.zip`, blob);
+      toast(`焼き込み一式を書き出しました（PNG ${pngCount}枚 / ${segCount}区間）`);
+    } catch (err) {
+      console.error(err);
+      toast('書き出しに失敗しました');
+    }
+  });
   els['btn-export-ass'].addEventListener('click', () => {
     if (!project.events.length) { toast('得点イベントがありません'); return; }
     captureWrapSize();
@@ -602,6 +626,110 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// ===== PC向け：キーボードショートカット =====
+function wireShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (!project || currentScreen !== 'edit') return;
+    if (e.target instanceof Element && e.target.matches('input, select, textarea')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // 長押しリピートはシーク（←→）のみ許可。得点/取消/セット操作の連射を防ぐ
+    if (e.repeat && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    switch (e.key) {
+      case ' ':
+        e.preventDefault();
+        if (video.hasVideo()) video.toggle();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        if (video.hasVideo()) video.seekBy(e.shiftKey ? -10 : -1);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        if (video.hasVideo()) video.seekBy(e.shiftKey ? 10 : 1);
+        break;
+      case 'f': case 'F': doAddPoint('home'); break;
+      case 'j': case 'J': doAddPoint('away'); break;
+      case 'u': case 'U': els['btn-undo'].click(); break;
+      case 's': case 'S': els['btn-toggle-serve'].click(); break;
+      case 'n': case 'N': els['btn-next-set'].click(); break;
+      case 'p': case 'P': els['btn-prev-set'].click(); break;
+    }
+  });
+}
+
+// ===== スコア位置の微調整（1pxずつ） =====
+// プリセット位置では offsetX/offsetY、任意位置では x/y を直接動かす。
+function nudgeBoard(dx, dy) {
+  if (!project) return;
+  const d = project.display;
+  if (d.position === 'custom') {
+    d.x = Math.max(0, (d.x || 0) + dx);
+    d.y = Math.max(0, (d.y || 0) + dy);
+  } else {
+    d.offsetX = (d.offsetX || 0) + dx;
+    d.offsetY = (d.offsetY || 0) + dy;
+  }
+  updateNudgeVal();
+  refreshPreviewOnly();
+  persist();
+}
+
+function updateNudgeVal() {
+  if (!project) return;
+  const d = project.display;
+  els['nudge-val'].textContent = d.position === 'custom'
+    ? `x:${d.x || 0}, y:${d.y || 0}`
+    : `${d.offsetX || 0}, ${d.offsetY || 0}`;
+}
+
+function wireNudge() {
+  // タップ=1px、押し続けで連続移動（250ms後から80ms間隔）
+  const hold = (el, dx, dy) => {
+    let t1 = null, t2 = null;
+    const start = (e) => {
+      e.preventDefault();
+      nudgeBoard(dx, dy);
+      t1 = setTimeout(() => { t2 = setInterval(() => nudgeBoard(dx, dy), 80); }, 250);
+    };
+    const stop = () => { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; };
+    el.addEventListener('pointerdown', start);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((t) => el.addEventListener(t, stop));
+  };
+  hold(els['nudge-up'], 0, -1);
+  hold(els['nudge-down'], 0, 1);
+  hold(els['nudge-left'], -1, 0);
+  hold(els['nudge-right'], 1, 0);
+  els['nudge-reset'].addEventListener('click', () => {
+    if (!project) return;
+    const d = project.display;
+    if (d.position === 'custom') { d.x = 16; d.y = 16; }
+    else { d.offsetX = 0; d.offsetY = 0; }
+    updateNudgeVal();
+    refreshPreviewOnly();
+    persist();
+    toast('位置をリセットしました');
+  });
+}
+
+// ===== PC向け：動画のドラッグ&ドロップ =====
+function wireDragDrop() {
+  // ドロップ先を外したときにブラウザがファイルへページ遷移するのを防ぐ（アプリ消失対策）
+  document.addEventListener('dragover', (e) => e.preventDefault());
+  document.addEventListener('drop', (e) => e.preventDefault());
+  const wrap = els['video-wrap'];
+  ['dragover', 'dragenter'].forEach((t) =>
+    wrap.addEventListener(t, (e) => { e.preventDefault(); wrap.classList.add('drop-hover'); }));
+  ['dragleave', 'drop'].forEach((t) =>
+    wrap.addEventListener(t, (e) => { e.preventDefault(); wrap.classList.remove('drop-hover'); }));
+  wrap.addEventListener('drop', (e) => {
+    if (!project) return;
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name)) pickVideo(f);
+    else toast('動画ファイルをドロップしてください');
+  });
+}
+
 // ===== 起動 =====
 function registerSW() {
   if ('serviceWorker' in navigator) {
@@ -626,6 +754,9 @@ function init() {
   wireSettings();
   wireEdit();
   wireExport();
+  wireShortcuts();
+  wireDragDrop();
+  wireNudge();
   registerSW();
   requestPersistence(); // iOSのデータ自動削除を抑止（失敗は無視）
   restoreLastOrList();  // 前回のプロジェクトがあれば自動で開く

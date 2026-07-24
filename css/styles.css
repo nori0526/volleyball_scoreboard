@@ -200,30 +200,13 @@ output { color: var(--text); font-variant-numeric: tabular-nums; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ============ スコアボード ============ */
+/* ============ スコアボード（Canvas描画） ============ */
 .scoreboard {
   position: absolute;
-  display: inline-block;
-  padding: 5px 8px;
-  border-radius: 8px;
-  line-height: 1.2;
-  transform-origin: top left;
-  font-variant-numeric: tabular-nums;
+  display: block;
   pointer-events: none;
-  max-width: 92%;
-  white-space: nowrap;
 }
 .scoreboard.draggable { pointer-events: auto; cursor: move; touch-action: none; }
-.sb-setcount { font-size: 0.5em; opacity: 0.85; margin-bottom: 2px; font-weight: 600; }
-.sb-grid { display: grid; gap: 1px 0.45em; align-items: center; }
-.sb-corner { display: block; }
-.sb-setnum { font-size: 0.5em; opacity: 0.8; text-align: right; padding-bottom: 1px; }
-.sb-team { display: flex; align-items: center; gap: 0.35em; min-width: 0; padding-right: 0.3em; }
-.sb-mark { width: 0.7em; height: 0.7em; border-radius: 3px; flex: 0 0 auto; }
-.sb-name { overflow: hidden; text-overflow: ellipsis; }
-.sb-score { font-weight: 700; min-width: 1.3em; text-align: right; }
-.sb-serve { width: 0.55em; height: 0.55em; border-radius: 50%; background: #ff2d2d; flex: 0 0 auto; }
-.sb-serve.hidden-slot { background: transparent; }
 
 /* ============ 編集コントロール ============ */
 .edit-controls {
@@ -354,8 +337,51 @@ output { color: var(--text); font-variant-numeric: tabular-nums; }
 }
 
 /* ============ 横画面対応 ============ */
+/* 高さを固定せず、縦横比を保ったまま幅を制限（レターボックス防止：
+   プレビュー枠＝動画フレームの前提を崩さない） */
 @media (orientation: landscape) and (max-height: 500px) {
-  .video-wrap { aspect-ratio: auto; height: 56vh; }
+  .video-wrap { width: min(100%, calc(56vh * var(--ar, 1.7778))); margin: 0 auto; }
   .score-buttons { gap: 10px; }
   .btn-score { min-height: 70px; padding: 12px 8px; }
+}
+
+/* ============ スコア位置の微調整 ============ */
+.nudge-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.nudge-box summary { cursor: pointer; font-size: 14px; color: var(--text-dim); user-select: none; }
+.nudge-controls { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.nudge-controls .btn-fine { min-width: 44px; touch-action: none; }
+#nudge-val { min-width: 52px; text-align: center; }
+
+/* ============ PC向け（広い画面） ============ */
+.kbd-hint { display: none; font-size: 12px; color: var(--text-dim); margin: 0; line-height: 1.6; }
+.video-wrap.drop-hover { outline: 3px dashed var(--primary); outline-offset: -3px; }
+
+@media (min-width: 980px) {
+  .kbd-hint { display: block; }
+  #screen-edit { flex-direction: row; align-items: flex-start; }
+  #screen-edit .video-area {
+    flex: 1.6;
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: center;
+    align-self: stretch;
+  }
+  #screen-edit .video-wrap {
+    width: min(100%, calc((100vh - 120px) * var(--ar, 1.7778)));
+    margin: 0 auto;
+    align-self: center;
+  }
+  #screen-edit .edit-controls {
+    flex: 1;
+    min-width: 340px;
+    max-width: 480px;
+    padding-bottom: 24px;
+  }
+  .screen-pad { max-width: 860px; margin: 0 auto; }
 }

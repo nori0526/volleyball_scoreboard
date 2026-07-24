@@ -40,7 +40,9 @@ function exportBoardAt(p, t) {
   return { sets, server: cur.found ? cur.server : null, won };
 }
 
-function buildSegments(p) {
+// 表示状態が変化する時間区間を列挙（ASS/PNG焼き込みで共用）。
+// 返り値: [{start, end, state:{sets,server,won}, sig}]
+export function buildStateSegments(p) {
   const events = [...p.events].sort((a, b) => a.time - b.time);
   if (!events.length) return [];
   const dur = p.videoDuration || (events[events.length - 1].time + 5);
@@ -82,7 +84,8 @@ export function buildAss(p, opts = {}) {
   const serveW = d.showServe ? fs * 0.95 : 0;
   const maxNameChars = Math.max(2, p.teams.home.name.length, p.teams.away.name.length);
   const nameColW = fs * Math.min(maxNameChars, 10);
-  const M = 12 * S; // プリセット余白
+  const M = 12; // プリセット余白（PlayRes=プレビューpx基準。scaleは掛けない）
+  const OX = d.offsetX || 0, OY = d.offsetY || 0; // 位置微調整（+で右/下）
 
   const textC = '&H' + assAlpha(1) + assColor(d.textColor) + '&';
   const homeC = '&H' + assAlpha(1) + assColor(p.teams.home.color) + '&';
@@ -106,7 +109,7 @@ export function buildAss(p, opts = {}) {
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text'
   ].join('\n');
 
-  const segs = buildSegments(p);
+  const segs = buildStateSegments(p);
   const lines = [];
 
   for (const seg of segs) {
@@ -122,16 +125,18 @@ export function buildAss(p, opts = {}) {
     const boxW = contentW + 2 * padH;
     const boxH = contentH + 2 * padV;
 
-    // ボックス位置（左上 bx,by）
+    // ボックス位置（左上 bx,by）。微調整オフセット込み・端でクランプ
     let bx, by;
     switch (d.position) {
-      case 'top-right': bx = playW - boxW - M; by = M; break;
-      case 'bottom-left': bx = M; by = playH - boxH - M; break;
-      case 'bottom-right': bx = playW - boxW - M; by = playH - boxH - M; break;
+      case 'top-right': bx = playW - boxW - M + OX; by = M + OY; break;
+      case 'bottom-left': bx = M + OX; by = playH - boxH - M + OY; break;
+      case 'bottom-right': bx = playW - boxW - M + OX; by = playH - boxH - M + OY; break;
       case 'custom': bx = (d.x || 0); by = (d.y || 0); break;
       case 'top-left':
-      default: bx = M; by = M; break;
+      default: bx = M + OX; by = M + OY; break;
     }
+    bx = Math.min(Math.max(0, bx), Math.max(0, playW - boxW));
+    by = Math.min(Math.max(0, by), Math.max(0, playH - boxH));
     const cx = bx + padH, cy = by + padV;
 
     const dlg = (layer, txt) => lines.push(`Dialogue: ${layer},${start},${end},SB,,0,0,0,,${txt}`);

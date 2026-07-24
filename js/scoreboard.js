@@ -1,91 +1,46 @@
-// scoreboard.js — スコアボードの重ね表示・位置/サイズ/配色適用・ドラッグ
+// scoreboard.js — スコアボードの重ね表示（Canvas描画）・位置適用・ドラッグ
+// 描画本体は board-render.js に一本化（プレビュー＝書き出しPNG の見た目一致のため）。
 import { computeSetsWon } from './state.js';
+import { drawBoard } from './board-render.js';
 
-function hexToRgba(hex, alpha) {
-  let h = (hex || '#000000').replace('#', '');
-  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-  const n = parseInt(h, 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-// el: #scoreboard, p: project, board: {displaySet, sets:[{set,home,away}], server}
-// 全セットを横並びの列として表示する（前セットの得点を残す）。
+// el: #scoreboard（canvas要素）, p: project,
+// board: {displaySet, sets:[{set,home,away}], server}
 export function renderScoreboard(el, p, board) {
-  const d = p.display;
   el.hidden = false;
-  const sets = board.sets.length ? board.sets : [{ set: 1, home: 0, away: 0 }];
-  const showServe = d.showServe;
-
-  // グリッド列：[チーム名] + [各セット] + [サーブ列(任意)]
-  const cols = 'auto repeat(' + sets.length + ', auto)' + (showServe ? ' auto' : '');
-
-  // ヘッダ行（セット番号）
-  let header = '<span class="sb-corner"></span>';
-  for (const s of sets) header += `<span class="sb-setnum">${s.set}</span>`;
-  if (showServe) header += '<span class="sb-corner"></span>';
-
-  const teamRow = (side) => {
-    const team = p.teams[side];
-    let r = `<span class="sb-team"><span class="sb-mark" style="background:${team.color}"></span>` +
-            `<span class="sb-name">${escapeHtml(team.name)}</span></span>`;
-    for (const s of sets) r += `<span class="sb-score">${side === 'home' ? s.home : s.away}</span>`;
-    if (showServe) r += `<span class="sb-serve${board.server === side ? '' : ' hidden-slot'}"></span>`;
-    return r;
-  };
-
-  let setCountHtml = '';
-  if (d.showSetCount) {
-    const w = computeSetsWon(p, board.displaySet);
-    setCountHtml = `<div class="sb-setcount">セット ${w.home} - ${w.away}</div>`;
+  if (p.display.showSetCount) {
+    const top = board.displaySet ||
+      (board.sets && board.sets.length ? board.sets[board.sets.length - 1].set : 1);
+    board.won = computeSetsWon(p, top);
   }
-
-  el.innerHTML =
-    setCountHtml +
-    `<div class="sb-grid" style="grid-template-columns:${cols};">` +
-    header + teamRow('home') + teamRow('away') +
-    '</div>';
-
-  applyStyle(el, p);
+  const dpr = window.devicePixelRatio || 1;
+  const m = drawBoard(el, p, board, p.display.scale || 1, dpr);
+  el.style.width = m.w + 'px';
+  el.style.height = m.h + 'px';
+  applyPosition(el, p);
 }
 
-// 見た目（色・サイズ・背景）と位置の適用
+// 後方互換：見た目はCanvas描画時に反映されるため、位置適用のみ行う。
 export function applyStyle(el, p) {
-  const d = p.display;
-  el.style.fontSize = d.fontSize + 'px';
-  el.style.color = d.textColor;
-  el.style.transform = `scale(${d.scale})`;
-  const pad = d.padding != null ? d.padding : 5;
-  el.style.padding = `${pad}px ${pad + 3}px`;
-  if (d.showBackground) {
-    el.style.background = hexToRgba(d.backgroundColor, d.backgroundOpacity);
-  } else {
-    el.style.background = 'transparent';
-  }
   applyPosition(el, p);
 }
 
 export function applyPosition(el, p) {
   const d = p.display;
-  // 一旦すべてリセット
   el.style.top = el.style.bottom = el.style.left = el.style.right = 'auto';
   el.classList.toggle('draggable', d.position === 'custom');
-  const m = 12; // プリセット時のマージン
+  const M = 12; // プリセット時の基本マージン（プレビューpx）
+  const ox = d.offsetX || 0, oy = d.offsetY || 0; // +で右/下へ微調整
+  const c = (v) => Math.max(0, v) + 'px'; // 端まで（0）でクランプ
   switch (d.position) {
-    case 'top-left': el.style.top = m + 'px'; el.style.left = m + 'px'; break;
-    case 'top-right': el.style.top = m + 'px'; el.style.right = m + 'px'; el.style.transformOrigin = 'top right'; break;
-    case 'bottom-left': el.style.bottom = m + 'px'; el.style.left = m + 'px'; el.style.transformOrigin = 'bottom left'; break;
-    case 'bottom-right': el.style.bottom = m + 'px'; el.style.right = m + 'px'; el.style.transformOrigin = 'bottom right'; break;
+    case 'top-left': el.style.top = c(M + oy); el.style.left = c(M + ox); break;
+    case 'top-right': el.style.top = c(M + oy); el.style.right = c(M - ox); break;
+    case 'bottom-left': el.style.bottom = c(M - oy); el.style.left = c(M + ox); break;
+    case 'bottom-right': el.style.bottom = c(M - oy); el.style.right = c(M - ox); break;
     case 'custom':
     default:
       el.style.left = (d.x || 0) + 'px';
       el.style.top = (d.y || 0) + 'px';
-      el.style.transformOrigin = 'top left';
       break;
-  }
-  if (d.position !== 'custom') {
-    // プリセットでは origin を該当角に（top-left は既定）
-    if (d.position === 'top-left') el.style.transformOrigin = 'top left';
   }
 }
 
@@ -115,8 +70,8 @@ export function enableDrag(el, wrap, getProject, onChange) {
     const wr = wrap.getBoundingClientRect();
     let nx = baseX + (pt.x - startX);
     let ny = baseY + (pt.y - startY);
-    nx = Math.max(0, Math.min(nx, wr.width - el.offsetWidth * (p.display.scale || 1)));
-    ny = Math.max(0, Math.min(ny, wr.height - el.offsetHeight * (p.display.scale || 1)));
+    nx = Math.max(0, Math.min(nx, wr.width - el.offsetWidth));
+    ny = Math.max(0, Math.min(ny, wr.height - el.offsetHeight));
     p.display.x = Math.round(nx);
     p.display.y = Math.round(ny);
     el.style.left = p.display.x + 'px';
@@ -136,9 +91,4 @@ export function enableDrag(el, wrap, getProject, onChange) {
   window.addEventListener('touchmove', move, { passive: false });
   window.addEventListener('mouseup', up);
   window.addEventListener('touchend', up);
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

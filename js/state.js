@@ -33,6 +33,8 @@ export function createProject() {
       position: 'top-left',
       x: 16,
       y: 16,
+      offsetX: 0,   // プリセット位置からの微調整（+で右へ）
+      offsetY: 0,   // プリセット位置からの微調整（+で下へ）
       fontSize: 28,
       scale: 1,
       textColor: '#ffffff',
