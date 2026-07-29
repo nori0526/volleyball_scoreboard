@@ -138,6 +138,9 @@ button, input, select { font-family: inherit; font-size: 16px; }
   background: var(--surface);
   padding: 2px;
 }
+.color2-label { display: flex; align-items: center; gap: 4px; }
+.color2-label input.color2-on { width: 16px; height: 16px; accent-color: var(--primary); }
+.field-color input[type="color"]:disabled { opacity: 0.35; }
 .field-check { flex-direction: row; align-items: center; gap: 10px; }
 .field-check input { width: 22px; height: 22px; accent-color: var(--primary); }
 .field-check span { color: var(--text); font-size: 15px; }

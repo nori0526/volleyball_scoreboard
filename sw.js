@@ -1,6 +1,6 @@
 /* Service Worker: アプリシェルのみキャッシュ（cache-first）。
    動画リソースは絶対にキャッシュしない。 */
-const CACHE = 'score-caption-v11';
+const CACHE = 'score-caption-v12';
 const SHELL = [
   './',
   './index.html',

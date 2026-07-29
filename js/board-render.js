@@ -125,10 +125,23 @@ export function drawBoard(canvas, p, board, K, dpr = 1) {
 
   const row = (side, rowTop) => {
     const cy = rowTop + m.lineH / 2;
-    // チームカラーの角丸マーク
-    ctx.fillStyle = p.teams[side].color;
-    roundRectPath(ctx, m.padH, cy - m.markSz / 2, m.markSz, m.markSz, 3 * K);
-    ctx.fill();
+    // チームカラーの角丸マーク（色2があれば左右ツートン）
+    const team = p.teams[side];
+    const mx = m.padH, my = cy - m.markSz / 2;
+    if (team.color2) {
+      ctx.save();
+      roundRectPath(ctx, mx, my, m.markSz, m.markSz, 3 * K);
+      ctx.clip();
+      ctx.fillStyle = team.color;
+      ctx.fillRect(mx, my, m.markSz / 2, m.markSz);
+      ctx.fillStyle = team.color2;
+      ctx.fillRect(mx + m.markSz / 2, my, m.markSz / 2, m.markSz);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = team.color;
+      roundRectPath(ctx, mx, my, m.markSz, m.markSz, 3 * K);
+      ctx.fill();
+    }
     // チーム名
     ctx.font = `${m.fs}px ${F}`;
     ctx.fillStyle = d.textColor;

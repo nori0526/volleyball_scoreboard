@@ -174,9 +174,17 @@ export function buildAss(p, opts = {}) {
     }
     // 行（home/away）
     const row = (side, rowY, label, getScore) => {
-      // チームカラーの四角マーク
+      // チームカラーの四角マーク（色2があれば左右ツートン）
       const my = rowY + (lineH - markW) / 2;
-      dlg(1, `{\\an7\\pos(${r(cx)},${r(my)})\\bord0\\shad0\\1c${teamC(side)}\\p1}m 0 0 l ${r(markW)} 0 ${r(markW)} ${r(markW)} 0 ${r(markW)}{\\p0}`);
+      const team = p.teams[side];
+      if (team.color2) {
+        const c2 = '&H' + assAlpha(1) + assColor(team.color2) + '&';
+        const half = r(markW / 2);
+        dlg(1, `{\\an7\\pos(${r(cx)},${r(my)})\\bord0\\shad0\\1c${teamC(side)}\\p1}m 0 0 l ${half} 0 ${half} ${r(markW)} 0 ${r(markW)}{\\p0}`);
+        dlg(1, `{\\an7\\pos(${r(cx) + half},${r(my)})\\bord0\\shad0\\1c${c2}\\p1}m 0 0 l ${r(markW) - half} 0 ${r(markW) - half} ${r(markW)} 0 ${r(markW)}{\\p0}`);
+      } else {
+        dlg(1, `{\\an7\\pos(${r(cx)},${r(my)})\\bord0\\shad0\\1c${teamC(side)}\\p1}m 0 0 l ${r(markW)} 0 ${r(markW)} ${r(markW)} 0 ${r(markW)}{\\p0}`);
+      }
       // チーム名
       dlg(1, `{\\an7\\pos(${r(cx + markW + markGap)},${r(rowY)})\\fs${r(fs)}\\c${textC}\\bord0\\shad0}${assText(label)}`);
       // 各セットのスコア（完了セットの敗者側は半透明で勝者を強調）

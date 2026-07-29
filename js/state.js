@@ -26,8 +26,9 @@ export function createProject() {
     updatedAt: new Date().toISOString(),
     currentSet: 1,
     teams: {
-      home: { name: '自チーム', color: '#b470e1' },
-      away: { name: '相手チーム', color: '#f85149' }
+      // color2 は任意の2色目（'' = 1色のみ）。2色時は■マークが左右ツートンになる
+      home: { name: '自チーム', color: '#b470e1', color2: '' },
+      away: { name: '相手チーム', color: '#f85149', color2: '' }
     },
     display: {
       position: 'top-right',

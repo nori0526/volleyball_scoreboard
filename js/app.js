@@ -31,6 +31,7 @@ function cacheEls() {
     'btn-back', 'header-title', 'save-indicator',
     'btn-new-project', 'btn-import-json', 'file-import', 'project-list',
     'set-project-name', 'set-home-name', 'set-home-color', 'set-away-name', 'set-away-color',
+    'set-home-color2', 'set-home-color2-on', 'set-away-color2', 'set-away-color2-on',
     'set-text-color', 'set-bg-color', 'set-show-bg', 'set-bg-opacity', 'out-bg-opacity',
     'set-position', 'set-font-size', 'out-font-size', 'set-scale', 'out-scale', 'set-show-serve',
     'set-padding', 'out-padding', 'set-show-setcount', 'set-pause-on-score',
@@ -206,6 +207,14 @@ function fillSettingsForm() {
   els['set-home-color'].value = project.teams.home.color;
   els['set-away-name'].value = project.teams.away.name;
   els['set-away-color'].value = project.teams.away.color;
+  const fillC2 = (side) => {
+    const c2 = project.teams[side].color2 || '';
+    els[`set-${side}-color2-on`].checked = !!c2;
+    els[`set-${side}-color2`].value = c2 || '#ffffff';
+    els[`set-${side}-color2`].disabled = !c2;
+  };
+  fillC2('home');
+  fillC2('away');
   els['set-text-color'].value = d.textColor;
   els['set-bg-color'].value = d.backgroundColor;
   els['set-show-bg'].checked = d.showBackground;
@@ -244,6 +253,23 @@ function wireSettings() {
   };
   els['set-home-color'].addEventListener('input', (e) => { project.teams.home.color = e.target.value; applyTeamButtonColors(); refreshPreviewOnly(); persist(); });
   els['set-away-color'].addEventListener('input', (e) => { project.teams.away.color = e.target.value; applyTeamButtonColors(); refreshPreviewOnly(); persist(); });
+  // 2色目：チェックONで有効化、OFFで解除（''）
+  const wireColor2 = (side) => {
+    const chk = els[`set-${side}-color2-on`];
+    const inp = els[`set-${side}-color2`];
+    chk.addEventListener('change', () => {
+      inp.disabled = !chk.checked;
+      project.teams[side].color2 = chk.checked ? inp.value : '';
+      applyTeamButtonColors(); refreshPreviewOnly(); persist();
+    });
+    inp.addEventListener('input', () => {
+      if (!chk.checked) return;
+      project.teams[side].color2 = inp.value;
+      applyTeamButtonColors(); refreshPreviewOnly(); persist();
+    });
+  };
+  wireColor2('home');
+  wireColor2('away');
   els['set-text-color'].addEventListener('input', onDisplay('textColor'));
   els['set-bg-color'].addEventListener('input', onDisplay('backgroundColor'));
   els['set-show-bg'].addEventListener('change', onDisplay('showBackground'));
@@ -402,14 +428,19 @@ function renderAtTime(t, force = false) {
   updateStatusChips();
 }
 
-// 加点ボタンの色を、設定のチームカラーに合わせる
+// 加点ボタンの色を、設定のチームカラーに合わせる（2色時は左右ツートン）
 function applyTeamButtonColors() {
   if (!project) return;
-  const h = project.teams.home.color, a = project.teams.away.color;
-  els['btn-home-plus'].style.background = h;
-  els['btn-home-plus'].style.borderColor = h;
-  els['btn-away-plus'].style.background = a;
-  els['btn-away-plus'].style.borderColor = a;
+  const apply = (btn, team) => {
+    if (team.color2) {
+      btn.style.background = `linear-gradient(90deg, ${team.color} 50%, ${team.color2} 50%)`;
+    } else {
+      btn.style.background = team.color;
+    }
+    btn.style.borderColor = team.color;
+  };
+  apply(els['btn-home-plus'], project.teams.home);
+  apply(els['btn-away-plus'], project.teams.away);
 }
 
 function updateStatusChips() {
