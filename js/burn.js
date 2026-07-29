@@ -79,6 +79,12 @@ export async function buildBurnZip(p, { previewW, previewH }) {
   const batVal = (s) => s.replace(/%/g, '%%'); // batファイル内の % は %% にエスケープ
   const output = `${safeBase}_scored.mp4`;
 
+  // 音声は先頭トラック（AAC）だけを使う: -map 0:a:0?
+  // iPhoneの空間オーディオ(APAC)等、MP4へコピー不可の副音声トラックを除外するため。
+  // 終了判定は %ERRORLEVEL% neq 0（ffmpegは負の終了コードを返すことがあり、
+  // if errorlevel 1 では負数を検知できない）。
+  const ffArgs = (vcodec) =>
+    `-y -i "%INPUT%" -filter_complex_script filters.txt -map "[vout]" -map 0:a:0? ${vcodec} -c:a copy -movflags +faststart "%OUTPUT%"`;
   const bat = [
     '@echo off',
     'chcp 65001 >nul',
@@ -88,17 +94,18 @@ export async function buildBurnZip(p, { previewW, previewH }) {
     'where ffmpeg >nul 2>nul || (echo ffmpeg が見つかりません。PATH を確認してください。 & popd & pause & exit /b 1)',
     'if not exist "%INPUT%" (echo 動画ファイル "%INPUT%" がこのフォルダにありません。 & popd & pause & exit /b 1)',
     'echo 焼き込みを開始します: "%INPUT%"',
-    'ffmpeg -y -i "%INPUT%" -filter_complex_script filters.txt -map "[vout]" -map 0:a? -c:v h264_qsv -b:v 12M -c:a copy -movflags +faststart "%OUTPUT%"',
-    'if errorlevel 1 (',
-    '  echo QSV が使えないため libx264 で再試行します...',
-    '  ffmpeg -y -i "%INPUT%" -filter_complex_script filters.txt -map "[vout]" -map 0:a? -c:v libx264 -crf 20 -preset medium -c:a copy -movflags +faststart "%OUTPUT%"',
-    ')',
-    'if errorlevel 1 (',
-    '  echo.',
-    '  echo 失敗しました。上記の ffmpeg エラーを確認してください。',
-    '  del "%OUTPUT%" >nul 2>nul',
-    '  popd & pause & exit /b 1',
-    ')',
+    `ffmpeg ${ffArgs('-c:v h264_qsv -b:v 12M')}`,
+    'if %ERRORLEVEL% equ 0 goto done',
+    'echo QSV が使えないため libx264 で再試行します...',
+    `ffmpeg ${ffArgs('-c:v libx264 -crf 20 -preset medium')}`,
+    'if %ERRORLEVEL% equ 0 goto done',
+    'echo.',
+    'echo 失敗しました。上記の ffmpeg エラーを確認してください。',
+    'del "%OUTPUT%" >nul 2>nul',
+    'popd',
+    'pause',
+    'exit /b 1',
+    ':done',
     'echo.',
     'echo 完了: "%OUTPUT%"',
     'popd',

@@ -199,9 +199,11 @@ export function buildAss(p, opts = {}) {
   return header + '\n' + lines.join('\n') + '\n';
 }
 
-// 推奨 ffmpeg コマンド（参考表示用）
+// 推奨 ffmpeg コマンド（参考表示用）。
+// -map 0:v:0 -map 0:a:0 で先頭の映像/音声のみ使用（iPhoneの空間オーディオ
+// APAC 等、MP4へコピーできない副音声トラックを除外するため）。
 export function ffmpegCommand(videoName, assName) {
   const vid = videoName || 'input.mov';
   const ass = assName || 'scoreboard.ass';
-  return `ffmpeg -i "${vid}" -vf "ass=${ass}" -c:a copy output.mp4`;
+  return `ffmpeg -i "${vid}" -vf "ass=${ass}" -map 0:v:0 -map 0:a:0? -c:a copy output.mp4`;
 }
