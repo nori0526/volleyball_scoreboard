@@ -26,26 +26,26 @@ export function createProject() {
     updatedAt: new Date().toISOString(),
     currentSet: 1,
     teams: {
-      home: { name: '自チーム', color: '#1f6feb' },
+      home: { name: '自チーム', color: '#b470e1' },
       away: { name: '相手チーム', color: '#f85149' }
     },
     display: {
-      position: 'top-left',
+      position: 'top-right',
       x: 16,
       y: 16,
       offsetX: 0,   // プリセット位置からの微調整（+で右へ）
       offsetY: 0,   // プリセット位置からの微調整（+で下へ）
-      fontSize: 28,
-      scale: 1,
+      fontSize: 28, // PC（広い画面）での新規作成時は app.js 側で 39 に上書き
+      scale: 1,     // 同上、PC新規作成時は 1.2
       textColor: '#ffffff',
       backgroundColor: '#000000',
       backgroundOpacity: 0.55,
       showBackground: true,
       showServe: true,
       showSetCount: false,
-      padding: 5
+      padding: 8
     },
-    pauseOnScore: false,
+    pauseOnScore: true,
     // セット開始時刻の記録: { "2": 動画秒, "3": ... }（1セット目は常に0）。
     // 得点が入る前でも「新セット 0-0」の列をシーク/書き出しで表示するために必要。
     setStarts: {},

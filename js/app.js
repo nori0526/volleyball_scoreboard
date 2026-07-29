@@ -112,11 +112,23 @@ async function renderProjectList() {
       <div class="pc-main">
         <div class="pc-name"></div>
         <div class="pc-meta">${escapeHtml(p.videoFileName || '動画未選択')} ・ ${evCount}得点 ・ ${updated}</div>
+        <div class="pc-goto">
+          <button class="btn btn-small pc-go-settings">設定</button>
+          <button class="btn btn-small pc-go-edit">編集</button>
+          <button class="btn btn-small pc-go-events">履歴</button>
+        </div>
       </div>
       <button class="pc-dup" aria-label="複製">⧉</button>
       <button class="pc-del" aria-label="削除">🗑</button>`;
     card.querySelector('.pc-name').textContent = p.projectName;
-    card.querySelector('.pc-main').addEventListener('click', () => openProject(p.id));
+    card.querySelector('.pc-main').addEventListener('click', () => openProject(p.id, 'settings'));
+    const go = (cls, screen) => card.querySelector(cls).addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProject(p.id, screen);
+    });
+    go('.pc-go-settings', 'settings');
+    go('.pc-go-edit', 'edit');
+    go('.pc-go-events', 'events');
     card.querySelector('.pc-dup').addEventListener('click', async (e) => {
       e.stopPropagation();
       await duplicateProject(p);
@@ -134,6 +146,11 @@ async function renderProjectList() {
 
 async function newProject() {
   project = createProject();
+  // PC（広い画面）での新規作成時は文字サイズ・倍率を大きめに
+  if (window.matchMedia('(min-width: 980px)').matches) {
+    project.display.fontSize = 39;
+    project.display.scale = 1.2;
+  }
   actionStack = [];
   await saveProject(project);
   showSaved();
@@ -142,25 +159,39 @@ async function newProject() {
   showScreen('settings');
 }
 
-// 既存プロジェクトを複製（別IDで保存）
+// 既存プロジェクトを複製（別IDで保存）。
+// 通常は別試合の下敷きにするため、得点・セット記録をクリアするか選べる。
 async function duplicateProject(src) {
+  const clear = confirm(
+    '得点・セットの記録をクリアして複製しますか？\n\n' +
+    '［OK］記録をクリア（チーム・表示設定だけ引き継ぐ。別試合用）\n' +
+    '［キャンセル］記録もそのまま複製'
+  );
   const copy = JSON.parse(JSON.stringify(src));
   copy.id = genId();
   copy.projectName = (src.projectName || 'プロジェクト') + '（コピー）';
   copy.updatedAt = new Date().toISOString();
+  if (clear) {
+    copy.events = [];
+    copy.setStarts = {};
+    copy.currentSet = 1;
+    copy.videoFileName = '';
+    copy.videoDuration = 0;
+  }
   await saveProject(copy);
-  toast('複製しました');
+  toast(clear ? '記録をクリアして複製しました' : 'そのまま複製しました');
   renderProjectList();
 }
 
-async function openProject(id) {
+// screen: 開いた後に表示する画面（'settings' | 'edit' | 'events'）
+async function openProject(id, screen = 'settings') {
   const raw = await getProject(id);
   if (!raw) { toast('プロジェクトが見つかりません'); return; }
   project = normalizeProject(raw);
   actionStack = [];
   if (video) video.destroy();
   attachVideo();
-  showScreen('edit');
+  showScreen(screen);
   if (project.videoFileName) {
     toast(`「${project.videoFileName}」を選び直してください`);
   }
@@ -681,7 +712,13 @@ function escapeHtml(s) {
 function wireShortcuts() {
   document.addEventListener('keydown', (e) => {
     if (!project || currentScreen !== 'edit') return;
-    if (e.target instanceof Element && e.target.matches('input, select, textarea')) return;
+    // テキスト系の入力中のみ無効化。スライダー(range)やチェックボックスに
+    // フォーカスが残っていてもショートカットは効かせる（クリック後にSpaceが
+    // 効かなくなる問題の対策）。
+    if (e.target instanceof Element) {
+      if (e.target.matches('select, textarea')) return;
+      if (e.target.matches('input') && !e.target.matches('input[type="range"], input[type="checkbox"]')) return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     // 長押しリピートはシーク（←→）のみ許可。得点/取消/セット操作の連射を防ぐ
     if (e.repeat && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -692,11 +729,11 @@ function wireShortcuts() {
         break;
       case 'ArrowLeft':
         e.preventDefault();
-        if (video.hasVideo()) video.seekBy(e.shiftKey ? -10 : -1);
+        if (video.hasVideo()) video.seekBy(e.shiftKey ? -10 : -2);
         break;
       case 'ArrowRight':
         e.preventDefault();
-        if (video.hasVideo()) video.seekBy(e.shiftKey ? 10 : 1);
+        if (video.hasVideo()) video.seekBy(e.shiftKey ? 10 : 2);
         break;
       case 'f': case 'F': doAddPoint('home'); break;
       case 'j': case 'J': doAddPoint('away'); break;
@@ -704,6 +741,17 @@ function wireShortcuts() {
       case 's': case 'S': els['btn-toggle-serve'].click(); break;
       case 'n': case 'N': els['btn-next-set'].click(); break;
       case 'p': case 'P': els['btn-prev-set'].click(); break;
+    }
+  });
+
+  // 編集画面ではボタンクリック後にフォーカスを外す。
+  // フォーカスが残ると Space がそのボタンを再発火し、再生/停止が
+  // 二重実行（＝効いていないように見える）になるため。
+  document.addEventListener('click', (e) => {
+    if (currentScreen !== 'edit') return;
+    if (e.target instanceof Element) {
+      const btn = e.target.closest('button');
+      if (btn) btn.blur();
     }
   });
 }
@@ -794,7 +842,7 @@ async function restoreLastOrList() {
   const lastId = getLastProjectId();
   if (lastId) {
     const raw = await getProject(lastId);
-    if (raw) { await openProject(lastId); return; }
+    if (raw) { await openProject(lastId, 'edit'); return; }
   }
   showScreen('projects');
 }

@@ -157,6 +157,8 @@ output { color: var(--text); font-variant-numeric: tabular-nums; }
 .project-card .pc-main { flex: 1; min-width: 0; cursor: pointer; }
 .project-card .pc-name { font-weight: 600; margin-bottom: 4px; }
 .project-card .pc-meta { font-size: 12px; color: var(--text-dim); }
+.project-card .pc-goto { display: flex; gap: 6px; margin-top: 8px; }
+.project-card .pc-goto .btn-small { padding: 5px 12px; font-size: 13px; }
 .project-card .pc-del {
   background: none; border: none; color: var(--away);
   font-size: 20px; padding: 6px; cursor: pointer;
